@@ -28,19 +28,10 @@
 #
 #---------------------------------------------------------------------------    
 
-# Last Changes: July 2020
 
 # imports obj format up to X-Plane 11 into Blender 2.8+
-# Tested with Blender 2.83
-
-# This script adds the X-plane OBJ formatted aircraft files into the File -> Import menu
-# It will create a new collection and all the mesh data and attempt to add animation keyframes
-
-# Install the latest Xplane2Blender plugin to be able to import X-Plane features in addition to the mesh data.
 
 # Orginal script: https://github.com/daveprue/XPlane2Blender
-
-
 
 
 import bpy
@@ -54,7 +45,7 @@ import os
 bl_info = {
     "name": "Import X-Plane OBJ",
     "author": "Tony Nemec - original script by David C. Prue",
-    "version": (0,1,1),
+    "version": (0,1,0),
     "blender": (2,80,0),
     "api": 36273,
     "location": "File > Import/Export > XPlane",
@@ -73,18 +64,8 @@ class xplane11import(bpy.types.Operator):
         global collection
         print("execute %s" % self.filepath)
         # create new collection to match filename
-        collName = self.filepath.split('\\')[-1].split('.')[0]
-        collection = bpy.data.collections.new(collName)
+        collection = bpy.data.collections.new(self.filepath.split('\\')[-1].split('.')[0])
         bpy.context.scene.collection.children.link(collection)
-        # any time the xplane class is used, that code requires having the Xplane2Blender plugin enabled
-        try:
-            # name the xplane layer/collection property in the scene properties window
-            collection.xplane.layer.name = collName
-            # make this a root collection so it can be exported
-            collection.xplane.is_exportable_collection = True
-        except:
-            print
-
         # do the import      
         numObj = self.run((0,0,0))
         print('Imported %d objects' % numObj)
@@ -97,8 +78,6 @@ class xplane11import(bpy.types.Operator):
     def getMessage(self, messageType):
         if(messageType == 'dataref'):
             return 'Failed to create XPlane dataref. Make sure you have the XPlane2Blender plugin enabled.'
-        if(messageType == 'xplane'):
-            return 'If have the XPlane2Blender plugin enabled, you can enable many more features.'
         return ''
 
 
@@ -132,7 +111,6 @@ class xplane11import(bpy.types.Operator):
 
                         # set the dataref value
                         ob.xplane.datarefs[dataref_index].value = kf[2]
-
                         # add the xplane dataref keyframe
                         bpy.ops.object.add_xplane_dataref_keyframe(index=dataref_index)
                     except Exception as e:
@@ -190,10 +168,6 @@ class xplane11import(bpy.types.Operator):
                         print(self.getMessage('dataref'))
                         print(e)
 
-                if(kf[0] == 'loop'):
-                    # not really a keyframe, this just sets the loop value
-                    ob.xplane.datarefs[dataref_index].loop = kf[1]
-
                 # end kf loop
 
         bpy.context.scene.frame_set(1)
@@ -243,11 +217,15 @@ class xplane11import(bpy.types.Operator):
         # Create mesh from given verts, faces.
         me.from_pydata(verts, [], faces)
 
-        # Assign the normals for each vertex
+#        # Assign the normals for each vertex
         vindex = 0
         newNormals = []
         for vertex in me.vertices:
+#            if vertex.select:
+#                newNormals.append(Vector((1,0,0)))
+#            else:
             newNormals.append(normals[vindex])
+#            vertex.normal = normals[vindex]
             vindex += 1
 
         me.normals_split_custom_set_from_vertices(newNormals)
@@ -287,104 +265,25 @@ class xplane11import(bpy.types.Operator):
             bpy.ops.mesh.delete(type='VERT')
             bpy.ops.object.mode_set(mode='OBJECT')
         except Exception as e:
+            print(ob.name)
             print(e)
 
         return ob
 
-    def loadImageTexture(self, filename):
-        # Create texture
-        try:
-            tex = bpy.data.textures.new('Texture', type = 'IMAGE')
-            tex.image = bpy.data.images.load("%s\\%s" % (os.path.dirname(self.filepath), filename))
-            return tex
-        except:
-            # Try to load the image as .dds
-            try:
-                base = os.path.splitext(filename)[0]
-                tex.image = bpy.data.images.load("%s\\%s" % (os.path.dirname(self.filepath), base + '.dds'))
-                return tex
-            except:
-                print('Cannot find image file: ' + filename)
-                return False
-
-    def createBlenderMaterial(self, diffuseTex, name):
-        # Create and add a material
-        material = bpy.data.materials.new('Material')
-        # Add Texture to the Material via shader nodes
-        material.use_nodes = True
-        material.name = name
-
-        bsdf = material.node_tree.nodes["Principled BSDF"]
-        texImage = material.node_tree.nodes.new('ShaderNodeTexImage')
-        texImage.location = -350, 350
-        texImage.image = diffuseTex.image
-        material.node_tree.links.new(bsdf.inputs['Base Color'], texImage.outputs['Color'])
-
-        return material
-
-    def createNormalMap(self, material, normalTex):
-        if(material.node_tree):
-            nrmImage = material.node_tree.nodes.new('ShaderNodeTexImage')
-            nrmImage.location = -650, -50
-            nrmImage.image = normalTex.image
-            nrmImage.image.colorspace_settings.name = 'Non-Color'
-            mappingNode = material.node_tree.nodes.new('ShaderNodeNormalMap')
-            mappingNode.location = -300, -50
-            mappingNode.space = 'BLENDER_OBJECT'
-
-            material.node_tree.links.new(mappingNode.inputs['Color'], nrmImage.outputs['Color'])
-            bsdf = material.node_tree.nodes["Principled BSDF"]
-            material.node_tree.links.new(bsdf.inputs['Normal'], mappingNode.outputs['Normal'])
-
-        return material
-
-    def createEmissionShader(self, material, litTexture):
-        if(material.node_tree):
-            litImage = material.node_tree.nodes.new('ShaderNodeTexImage')
-            litImage.location = -650, -350
-            litImage.image = litTexture.image
-            EmissionNode = material.node_tree.nodes.new('ShaderNodeEmission')
-            EmissionNode.location = -300, -350
-            material.node_tree.links.new(EmissionNode.inputs['Color'], litImage.outputs['Color'])
-            bsdf = material.node_tree.nodes["Principled BSDF"]
-            mixShader = material.node_tree.nodes.new('ShaderNodeMixShader')
-            mixShader.location = 300, -200
-            mixShader.inputs[0].default_value = 0.0
-
-            materialOutput = material.node_tree.nodes['Material Output']
-            materialOutput.location = 500, 150
-            material.node_tree.links.new(mixShader.inputs[2], EmissionNode.outputs['Emission'])
-            material.node_tree.links.new(materialOutput.inputs['Surface'], mixShader.outputs['Shader']) 
-            material.node_tree.links.new(mixShader.inputs[1], bsdf.outputs['BSDF'])            
-
-        return material        
-
-    def getOrigins(self, keyframes):
-        # if the animation contains rotation, the rotation origin may be different
+    def getOrigin(self, keyframes):
+        # if the animation contains rotation, the origin may be different
         origin = Vector((0,0,0))
-        tempOrigin = 0
-        rotOrigin = Vector((0,0,0))
-        hasRotOrigin = False
+        tempOrigin = Vector((0,0,0))
         for kf in keyframes:
             if(len(kf)):
                 if(kf[0] == 'loc'):
-                    # save the translation position preceding rot
+                    # save the first translation position
                     tempOrigin = kf[1]
-                    # accumulate all translations for the obj location origin
-                    origin += kf[1]
-                if(kf[0] == 'rot' and hasRotOrigin == False):
-                    # if rotation follows translation, save we'll use that as the rotation origin
-                    rotOrigin = tempOrigin
-                    hasRotOrigin = True
-
-        return [origin, rotOrigin]
-
-    def getMeshMedian(self, obj):
-        obj.update_from_editmode()
-        me = obj.data
-        verts_sel = [v.co for v in me.vertices]
-        pivot = sum(verts_sel, Vector()) / len(verts_sel)
-        return pivot
+                if(kf[0] == 'rot'):
+                    # if rotation follows translation, save we'll use that as the origin
+                    origin = tempOrigin
+                    break;
+        return origin
 
     def transformMeshOrigin(self, ob, origin):
         # used to move the mesh origin
@@ -392,7 +291,6 @@ class xplane11import(bpy.types.Operator):
         return
 
     def translateObject(self, ob, location):
-        # used to move the entire object position
         ob.matrix_world.translation += location
         return
 
@@ -415,12 +313,6 @@ class xplane11import(bpy.types.Operator):
         meshObj = self.createMesh(obj['label'], obj['orig'], obj['verts'], obj['faces'], obj['mat'], obj['uv'], obj['nrm'], obj['attr'])      
 
         return meshObj
-
-    # parse obLabel from dataref
-    def parse_dataref(self, dataref, obLabel=''):
-        if(obLabel != ''):
-            return dataref.split('/')[-1]
-        return obLabel
 
     # parse file
     def run(self, origo):
@@ -454,44 +346,30 @@ class xplane11import(bpy.types.Operator):
 
             if(line[0] == 'TEXTURE'):
                 texfilename = line[1]
-                tex = self.loadImageTexture(texfilename)
-                if(tex):
-                    #tex.use_alpha = True
-                    # TODO: create alpha if needed
-                    name = texfilename.split('.')[0]
-                    material = self.createBlenderMaterial(tex, name)
-                    # set the layer/collection texture property
-                    # just in case this is needed
-                    # the exporter should be able to autodetect the texture from the material
-                    # 
+                # Create texture
+                tex = bpy.data.textures.new('Texture', type = 'IMAGE')
+                try:
+                    tex.image = bpy.data.images.load("%s\\%s" % (os.path.dirname(self.filepath), texfilename))
+                except:
+                    # Try to load the image as .dds
                     try:
-                        collection.xplane.layer.texture = texfilename
+                        base = os.path.splitext(texfilename)[0]
+                        tex.image = bpy.data.images.load("%s\\%s" % (os.path.dirname(self.filepath), base + '.dds'))
                     except:
-                        print('Could not assign texture to layer props')
+                        print('Cannot find image file: ' + texfilename)
+
+                tex.use_alpha = True
+
+                # Create and add a material
+                material = bpy.data.materials.new('Material')
+                # Add Texture to the Material via shader nodes
+                material.use_nodes = True
+
+                bsdf = material.node_tree.nodes["Principled BSDF"]
+                texImage = material.node_tree.nodes.new('ShaderNodeTexImage')
+                texImage.image = tex.image
+                material.node_tree.links.new(bsdf.inputs['Base Color'], texImage.outputs['Color'])
                 continue
-
-            if(line[0] == 'TEXTURE_NORMAL'):
-                if(material):
-                    texfilename = line[1]
-                    nrmtex = self.loadImageTexture(texfilename)
-                    if(nrmtex):
-                        self.createNormalMap(material, nrmtex)
-                        try:
-                            collection.xplane.layer.texture_normal = texfilename
-                        except:
-                            print('Could not assign normal texture to layer props')
-                    continue
-
-            if(line[0] == 'TEXTURE_LIT'):
-                if(material):
-                    texfilename = line[1]
-                    littex = self.loadImageTexture(texfilename)
-                    if(littex):
-                        self.createEmissionShader(material, littex)
-                        try:
-                            collection.xplane.layer.texture_lit = texfilename
-                        except:
-                            print('Could not assign lit texture to layer props')
 
             if(line[0] == '#'):
                 # if you export with debug mode, labels will be added for each object
@@ -558,28 +436,18 @@ class xplane11import(bpy.types.Operator):
                 trans1 = Vector( (trans_x, trans_y, trans_z) )
                 trans2 = Vector( (trans_x2, trans_y2, trans_z2) )              
 
-                
-                if(len(line) == 7):
-                    # position only translation
-                    dataref = 'none'
-                    keyframes.append( ('loc', trans1, 0, dataref) )                    
-
                 if(len(line) == 10):
                     # has a dataref
                     dataref = line[9]
-                    obLabel = self.parse_dataref(dataref,obLabel)
                     param1 = float(line[7])
                     param2 = float(line[8])
                     # add two keyframes
                     keyframes.append( ('loc', trans1, param1, dataref) )
                     keyframes.append( ('loc', trans2, param2, dataref) )
-
-
                 continue
 
             if(line[0] == 'ANIM_trans_begin'):
                 dataref = line[1]
-                obLabel = self.parse_dataref(dataref,obLabel)
                 # start a new keyframe tuple, we will read the position and value later
                 tempKeyframe = ('loc',0,0,dataref)
                 continue
@@ -597,9 +465,8 @@ class xplane11import(bpy.types.Operator):
                 if(len(line) == 9):
                     # has a dataref
                     dataref = line[8]
-                    obLabel = self.parse_dataref(dataref,obLabel)
                     # axis gets mapped as XZY because that will be Blenders XYZ
-                    axis = (float(line[1]), (float(line[3]) * -1), float(line[2]))
+                    axis = (float(line[1]), float(line[3]), float(line[2]))
                     r1 = float(line[4])
                     r2 = float(line[5])
                     v1 = float(line[6])
@@ -613,7 +480,6 @@ class xplane11import(bpy.types.Operator):
                 # ANIM_rotate_begin <x> <y> <z> <dataref>
                 axis = (float(line[1]), (float(line[3]) * -1), float(line[2]))
                 dataref = line[4]
-                obLabel = self.parse_dataref(dataref,obLabel)
                 # create temp keyframe with some of the params
                 tempKeyframe = ('rot',axis,0.0,0.0,dataref)
                 continue
@@ -625,15 +491,14 @@ class xplane11import(bpy.types.Operator):
                 continue
 
             if(line[0] == 'ANIM_keyframe_loop'):
-                # add dataref loop property
-                keyframes.append( ('loop', float(line[1])) )
+                # TODO: add loop property
+                print('loop')
 
             if(line[0] == 'ANIM_hide'):
                 # ANIM_hide <v1> <v2> <dataref>
                 v1 = float(line[1])
                 v2 = float(line[2])
                 dataref = line[3]
-                obLabel = self.parse_dataref(dataref,obLabel)
                 keyframes.append( ('hide', v1, v2, dataref) )
                 continue
 
@@ -642,7 +507,6 @@ class xplane11import(bpy.types.Operator):
                 v1 = float(line[1])
                 v2 = float(line[2])
                 dataref = line[3]
-                obLabel = self.parse_dataref(dataref,obLabel)
                 keyframes.append( ('show', v1, v2, dataref) )
                 continue              
             
@@ -695,7 +559,6 @@ class xplane11import(bpy.types.Operator):
                         # append to objects since this does not have a parent or child
                         objects = objects + anim['meshes']
 
-
                 # clear some vars
                 keyframes = []
                 use_trans = False
@@ -710,15 +573,9 @@ class xplane11import(bpy.types.Operator):
         for arm in armatures:
             # need to move the armature to the correct location based on rotations
             keyframes = arm['kf']
-            origins = self.getOrigins(keyframes)
-            location = origins[0]
-            rotOrigin = origins[1]
+            rotOrigin = self.getOrigin(keyframes)
             # create the armature 
             BlenderArm = self.createArmature( arm['label'], rotOrigin)
-            # set the label to the actual name of the Blender object
-            # as there could already be an exisiting object with the desired label
-            arm['objName'] = BlenderArm.name
-
             # apply the keyframes to the armature
             self.createKeyframes(keyframes, BlenderArm)
 
@@ -730,15 +587,6 @@ class xplane11import(bpy.types.Operator):
                 # parent it to the armature
                 self.addChild(BlenderArm, meshObj) 
 
-        # fix the parent property to match the actual names
-        for arm in armatures:
-            if(arm['parent'] != ''):
-                for arm2 in armatures:
-                    # find this parent
-                    if(arm2['label'] == arm['parent']):
-                        arm['parent'] = arm2['objName']
-
-
         # return to frame 0
         bpy.context.scene.frame_set(0)
 
@@ -747,11 +595,8 @@ class xplane11import(bpy.types.Operator):
         for index, obj in enumerate(objects):
             meshObj = self.createBlenderObject(obj)
             if(len(obj['kf'])):
-                origins = self.getOrigins(obj['kf'])
-                location = origins[0]
-                rotOrigin = origins[1]
-                if(location != rotOrigin):
-                    self.transformMeshOrigin(meshObj, rotOrigin)
+                rotOrigin = self.getOrigin(obj['kf'])
+                self.transformMeshOrigin(meshObj, rotOrigin)
                 self.translateObject(meshObj, rotOrigin)
                 # apply object animation keyframes
                 self.createKeyframes(obj['kf'], meshObj)
@@ -762,7 +607,7 @@ class xplane11import(bpy.types.Operator):
             if(arm['parent'] != ''):
                 try:
                     parentArm = bpy.context.view_layer.objects[arm['parent']]
-                    childArm = bpy.context.view_layer.objects[arm['objName']]
+                    childArm = bpy.context.view_layer.objects[arm['label']]
                     # reset the child position
                     childArm.location = childArm.location - parentArm.location
                     self.addChild(parentArm, childArm)
