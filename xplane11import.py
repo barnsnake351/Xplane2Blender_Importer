@@ -374,7 +374,11 @@ class xplane11import(bpy.types.Operator):
                     origin += kf[1]
                 if(kf[0] == 'rot' and hasRotOrigin == False):
                     # if rotation follows translation, save we'll use that as the rotation origin
-                    rotOrigin = tempOrigin
+                    if(tempOrigin == 0):
+                        # No previous ATTR loc present, assume only a rotation origin is present
+                        rotOrigin = Vector(kf[1])
+                    else:
+                        rotOrigin = tempOrigin
                     hasRotOrigin = True
 
         return [origin, rotOrigin]
@@ -545,7 +549,6 @@ class xplane11import(bpy.types.Operator):
                 animStack.append({'label': armLabel, 'kf': [], 'meshes': []})
                 # and track keyframes for this block
                 keyframes = []
-
                 continue
                 
             if(line[0] == 'ANIM_trans'):
@@ -573,8 +576,6 @@ class xplane11import(bpy.types.Operator):
                     # add two keyframes
                     keyframes.append( ('loc', trans1, param1, dataref) )
                     keyframes.append( ('loc', trans2, param2, dataref) )
-
-
                 continue
 
             if(line[0] == 'ANIM_trans_begin'):
@@ -698,7 +699,6 @@ class xplane11import(bpy.types.Operator):
 
                 # clear some vars
                 keyframes = []
-                use_trans = False
                 trans1 = Vector( ( 0, 0, 0 ) )
                 trans2 = Vector( ( 0, 0, 0 ) )
                 continue
