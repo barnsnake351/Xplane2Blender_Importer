@@ -50,6 +50,7 @@ import mathutils
 from mathutils import Vector, Euler
 import itertools
 import os
+from collections import namedtuple
 
 bl_info = {
     "name": "Import X-Plane OBJ",
@@ -75,6 +76,9 @@ class xplane11import(bpy.types.Operator):
         # create new collection to match filename
         collName = self.filepath.split('\\')[-1].split('.')[0]
         collection = bpy.data.collections.new(collName)
+        # Hide the collection from all viewports and renders by default
+        #collection.hide_viewport = True
+        collection.hide_render = True
         bpy.context.scene.collection.children.link(collection)
         # any time the xplane class is used, that code requires having the Xplane2Blender plugin enabled
         try:
@@ -201,8 +205,11 @@ class xplane11import(bpy.types.Operator):
 
     def createArmature(self, name, origin):
         #Create armature and armature object
-        arm = bpy.data.armatures.new( name + 'Arm')
+        arm = bpy.data.armatures.new( name + '.arm')
         arm.display_type = 'STICK'
+        for obj in bpy.context.collection.objects:
+            if obj.name == name:
+                name = name + 'iter'
         ob = bpy.data.objects.new( name , arm)
         # armature bone should be located at the rotation origin
         ob.location =  origin
@@ -215,8 +222,8 @@ class xplane11import(bpy.types.Operator):
 
         #Make a bone - locate it at the rotation origin
         bone = ob.data.edit_bones.new('Bone')
-        bone.head = (0,0,0)
-        bone.tail = (0,0.2,0)
+        bone.head = origin
+        bone.tail = origin + Vector((0,0.2,0))
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -226,7 +233,7 @@ class xplane11import(bpy.types.Operator):
     
     def createMesh(self, name, origin, verts, faces, mat, uvs, normals, attr):
         # Create mesh and object
-        me = bpy.data.meshes.new(name+'Mesh')
+        me = bpy.data.meshes.new(name+'.mesh')
         ob = bpy.data.objects.new(name, me)
         #ob.location = Vector((0,0,0))
         ob.location = origin
@@ -236,9 +243,6 @@ class xplane11import(bpy.types.Operator):
         collection.objects.link(ob)
         ob.select_set(True)
         bpy.context.view_layer.objects.active = ob
-
-        # Apply shade smooth
-        bpy.ops.object.shade_smooth()    
 
         # Create mesh from given verts, faces.
         me.from_pydata(verts, [], faces)
@@ -276,18 +280,39 @@ class xplane11import(bpy.types.Operator):
                 ob.xplane.customAttributes[-1].name = attribute[0]
                 ob.xplane.customAttributes[-1].value = ' '.join(attribute[1:])
             except Exception as e:
-                print(e)
+                print("Set Xplane Attribute: {}".format(e))
 
-        # cleanup loose vertexes that don't belong in this object
+        # cleanup loose edges/vertexes that don't belong in this object
+        # convert mesh from TRIS -> Quads
         try:
+            bpy.ops.object.select_pattern(pattern=ob.name)
             bpy.ops.object.mode_set(mode='EDIT')
             bpy.ops.mesh.select_all(action='DESELECT')
             bpy.ops.mesh.select_mode(type='VERT')
             bpy.ops.mesh.select_loose()
             bpy.ops.mesh.delete(type='VERT')
-            bpy.ops.object.mode_set(mode='OBJECT')
+            print('Mesh cleanup: vertex complete')
+
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_mode(type='EDGE')
+            bpy.ops.mesh.select_loose()
+            bpy.ops.mesh.delete(type='EDGE')
+            print('Mesh cleanup: edges complete')
+
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.tris_convert_to_quads(
+                face_threshold = math.radians(60), # Max face angle
+                shape_threshold = math.radians(60), # Max shape angle
+                uvs = True, # Compare UV maps
+                vcols = False, # Compare Vector Color maps
+                seam = True, # Compare Seams
+                sharp = True, # Compare Sharps
+                materials = True, # Compare Materials
+            )
+            print('Mesh cleanup: TRIS->Quad complete')
+
         except Exception as e:
-            print(e)
+            print("mesh cleanup: {}".format(e))
 
         return ob
 
@@ -400,16 +425,17 @@ class xplane11import(bpy.types.Operator):
         ob.matrix_world.translation += location
         return
 
-    def addChild(self, objParent, obj,):
+    def addChild(self, objParent, obj):
         try:
             obj.parent = objParent
             return objParent
         except Exception as e:
             print('failed to parent object: ')
-            print(objParent)
+            print('parent: {}'.format(objParent))
+            print('object: {}'.format(obj))
             print(e)
 
-        return ()
+        return None
 
 
     def createBlenderObject(self, obj):
@@ -423,7 +449,7 @@ class xplane11import(bpy.types.Operator):
     # parse obLabel from dataref
     def parse_dataref(self, dataref, obLabel=''):
         if(obLabel != ''):
-            return dataref.split('/')[-1]
+            return '.'.join([collection.name, dataref.split('/')[-1]])
         return obLabel
 
     # parse file
@@ -450,6 +476,18 @@ class xplane11import(bpy.types.Operator):
         objID = 0
         objects = []
         armatures = []
+        armatureMap = {}
+        current = None
+        CustomArmiture = namedtuple('CustomArmiture', 'label objName parent keyFrames meshes')
+        parentEmpty = False
+
+        # Switch to Edit mode as this tends to fix the location of all imported objects
+        # need to further debug 'the why' this works
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception as e:
+            print("Failed to switch to EDIT mode: {}".format(e))
+
         for lineStr in lines:
             line = lineStr.split()
             if (len(line) == 0):
@@ -497,14 +535,32 @@ class xplane11import(bpy.types.Operator):
                         except:
                             print('Could not assign lit texture to layer props')
 
+            if(line[0] == 'BLEND_GLASS'):
+                try:
+                    collection.xplane.layer.blend_glass = True
+                except:
+                    print('Failed to set BLEND_GLASS on collection')
+                continue
+
+            if(line[0] == 'NORMAL_METALNESS'):
+                try:
+                    collection.xplane.layer.normal_metalness = True
+                except:
+                    print('Failed to set NORMAL_METALNESS on collection')
+                continue
+
             if(line[0] == '#'):
                 # if you export with debug mode, labels will be added for each object
                 # we can then name the imported objects better
                 # save as debug label
-                newLabel = '_'.join(line[1:])
-                if(obLabel != newLabel):
-                    obLabel = newLabel
+                obLabel = '.'.join([collection.name, '_'.join(line[1:])])
+                #obLabel = '_'.join(line[1:])
+                continue
 
+            if(line[0] == '####_group'):
+                # create an empty to capture everything until the next group clause
+                parentEmpty = True
+                obLabel = '.'.join([collection.name, '_'.join(line[1:])])
                 continue
 
 
@@ -545,7 +601,7 @@ class xplane11import(bpy.types.Operator):
                 # create a new block with unique ID
                 animID +=1
                 # add a block to the stack
-                armLabel = obLabel if obLabel != '' else 'ARM%d' % animID
+                armLabel = obLabel if obLabel.strip() != '' else '.'.join([collection.name,'ARM%d' % animID])
                 animStack.append({'label': armLabel, 'kf': [], 'meshes': []})
                 # and track keyframes for this block
                 keyframes = []
@@ -654,7 +710,7 @@ class xplane11import(bpy.types.Operator):
                 faceData = tuple( zip(*[iter(face_lst)]*3) )
 
                 if(obLabel == ''):
-                    obLabel = 'OBJ%d' % objID
+                    obLabel = '.'.join([collection.name,'OBJ%d' % objID])
 
                 # make a dict of the mesh object
                 meshObject = {'id': objID, 'label': obLabel, 'orig': obj_origin, 'verts': verts, 'faces': faceData, 'mat': material, 'uv': uv, 'nrm': normals, 'attr': attributes, 'kf': keyframes}
@@ -718,6 +774,10 @@ class xplane11import(bpy.types.Operator):
             # set the label to the actual name of the Blender object
             # as there could already be an exisiting object with the desired label
             arm['objName'] = BlenderArm.name
+            armatureMap[arm['label']] = {'object': BlenderArm, 'src': arm, 'objName': BlenderArm.name}
+            #armatureMap[arm['label']]['src']['meshes'] = []
+            #print(f"{arm['label']} = {armatureMap[arm['label']]}")
+            #print(f"Armiture: {arm['label']} created with ID: {arm['objName']}")
 
             # apply the keyframes to the armature
             self.createKeyframes(keyframes, BlenderArm)
@@ -728,7 +788,10 @@ class xplane11import(bpy.types.Operator):
                 # translate the mesh to match the armature origin
                 self.transformMeshOrigin(meshObj, BlenderArm.location)
                 # parent it to the armature
-                self.addChild(BlenderArm, meshObj) 
+                print(f"  Armiture mesh created with ID: {meshObj.name}\n    Setting parent to: {arm['label']}[{BlenderArm.name}]")
+                oc = self.addChild(BlenderArm, meshObj) 
+                if oc is None:
+                    print(f"    ERROR: Failed to parent mesh to {arm['label']}[{BlenderArm.name}]")
 
         # fix the parent property to match the actual names
         for arm in armatures:
@@ -738,14 +801,13 @@ class xplane11import(bpy.types.Operator):
                     if(arm2['label'] == arm['parent']):
                         arm['parent'] = arm2['objName']
 
-
         # return to frame 0
         bpy.context.scene.frame_set(0)
-
 
         # loop through the loose meshes and create the Blender meshes
         for index, obj in enumerate(objects):
             meshObj = self.createBlenderObject(obj)
+            print(f"Mesh created: {meshObj.name}")
             if(len(obj['kf'])):
                 origins = self.getOrigins(obj['kf'])
                 location = origins[0]
@@ -756,20 +818,35 @@ class xplane11import(bpy.types.Operator):
                 # apply object animation keyframes
                 self.createKeyframes(obj['kf'], meshObj)
 
-
         # create the parent/child relationships
         for arm in armatures:
-            if(arm['parent'] != ''):
+            if(arm['parent'].strip() != ''):
+                print(f"Re-Parenting: {arm['label']}[{arm['objName']}] -> {arm['parent']}")
                 try:
-                    parentArm = bpy.context.view_layer.objects[arm['parent']]
-                    childArm = bpy.context.view_layer.objects[arm['objName']]
-                    # reset the child position
-                    childArm.location = childArm.location - parentArm.location
-                    self.addChild(parentArm, childArm)
+                    if arm['parent'] in armatureMap:
+                        #parentArm = armatureMap[arm['parent']]['object']
+                        #childArm = armatureMap[arm['objName']]['object']
+                        parentArm = bpy.context.view_layer.objects[arm['parent']]
+                        childArm = bpy.context.view_layer.objects[arm['objName']]
+                        # reset the child position
+                        childArm.location = childArm.location - parentArm.location
+                        oc = self.addChild(parentArm, childArm)
+                        if oc is None:
+                            print("failed to parent armature")
+
                 except Exception as e:
                     print(e)     
 
         # end loop
+        # Switch back to OBJECT mode, update everything to use the smooth shader within the new collection
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_same_collection(collection=collection.name)
+            bpy.ops.object.shade_smooth()
+            bpy.ops.object.select_all(action='DESELECT')
+        except Exception as e1:
+            print("Failed to reset to object mode: {}".format(e1))
+
 
         return len(objects) + len(armatures)
         
