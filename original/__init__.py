@@ -27,37 +27,16 @@
 # SOFTWARE.
 #
 #---------------------------------------------------------------------------    
-#
-# Updated to support current versions of Blender >= 4.0
-#
-# Original credit to both Dave Prue and Tony Nemec for their work on the
-# bulk of this tooling.
-#
-# Brian Engleman <barnsnake351@gmail.com>
-#
-# * Migrated to standardized module definition
-# * Adjusted animations to use Empties over Armatures
-# * Added options to override mesh-import topology characteristics
-#   * Tris->Quad
-#   * Auto-Smooth
-#
-#---------------------------------------------------------------------------    
-
 
 bl_info = {
-    "name": "Import: X-Plane (.obj)",
-    "author": "Brian Engleman - original authors: Tony Nemec - original script by David C. Prue",
-    "version": (0,2,0),
-    "blender": (3,10,0),
-    "location": "File > Import/Export > X-Plane",
-    "description": "Import X-Plane objects/planes (.obj format)",
-    "warning": "Requires installation of dependencies",
-    "category": "Import-Export",
+    "name": "Import X-Plane OBJ",
+    "author": "Tony Nemec - original script by David C. Prue",
+    "version": (0,1,1),
+    "blender": (2,80,0),
+    "api": 36273,
+    "location": "File > Import/Export > XPlane",
+    "description": "Import X-Plane obj",
+    "category": "Import-Export"
 }
 
-import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler())
-
-from .register import *
+from .xplane11import import *

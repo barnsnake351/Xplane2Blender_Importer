@@ -559,7 +559,7 @@ class xplane11import(bpy.types.Operator):
 
             if(line[0] == '####_group'):
                 # create an empty to capture everything until the next group clause
-                parentEmpty = True
+                parent_to_empty = True
                 obLabel = '.'.join([collection.name, '_'.join(line[1:])])
                 continue
 
