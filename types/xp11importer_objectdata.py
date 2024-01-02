@@ -8,6 +8,7 @@ import logging
 import sys
 from typing import Any, List
 
+from .types import Attribute
 from .xp11importer_keyframe import KeyFrame
 
 if sys.version_info < (3,11):
@@ -25,7 +26,7 @@ class ObjectType(Enum):
 
 @dataclass
 class ObjectData:
-   attr: List[str] = field(default_factory=list)
+   attr: List[Attribute] = field(default_factory=list)
    faceData: tuple = None
    objectOrigin: Vector = Vector((0,0,0))
    
@@ -179,34 +180,5 @@ class ObjectData:
 
       logger.info(f"setting self.bl_object => obj {self.bl_object} => {obj}")
       self.bl_object = obj
-      #logger.info(f"setting self.name => obj.name {self.name} => {obj.name}")
-      #self.name = obj.name
       return self.bl_object
          
-   
-#   def New(self,
-#           object_type: ObjectType,
-#           collection: bpy.types.Collection = None,
-#           name: str = '',
-#           name_prefix: str =''):
-#      self.type = object_type
-#      logger.info(f"New(collection={collection}, name={name}, name_prefix={name_prefix})")
-#      if(name == ''):
-#         name = self.name
-#
-#      if name_prefix != '':
-#         name_prefix = f"{name_prefix}."
-#
-#      if self.name == '':
-#         self.name = f"{name_prefix}{object_type.name}"
-#      else:
-#         self.name = f"{name_prefix}{object_type.name}.{name}"
-
-
- 
-
-_classes = (
-   ObjectData,
-)
-
-register, unregister = bpy.utils.register_classes_factory(_classes)

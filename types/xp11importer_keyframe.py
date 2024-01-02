@@ -1,6 +1,6 @@
 import bpy
 import mathutils
-from mathutils import Vector
+#from mathutils import Vector
 
 from dataclasses import dataclass
 from enum import Enum
@@ -16,8 +16,8 @@ class KeyframeType(Enum):
 
 @dataclass
 class KeyFrame:
-   loc: Vector = Vector((0,0,0))
-   axis: Vector = Vector((0,0,0))
+   loc: mathutils.Vector = mathutils.Vector((0,0,0))
+   axis: mathutils.Vector = mathutils.Vector((0,0,0))
    angle: float = 0.0
    param: float = 0.0
    dataref: str = 'none'
@@ -25,7 +25,7 @@ class KeyFrame:
 
    def GetEulerRotation(self):
       rad = math.radians(self.angle)
-      return Vector((
+      return mathutils.Vector((
          (self.axis[0] * rad),
          (self.axis[1] * rad),
          (self.axis[2] * rad),
@@ -52,8 +52,8 @@ class KeyFrame:
       return dataref, dataref_index
          
 
-_classes = (
-   KeyFrame,
-)
-
-register, unregister = bpy.utils.register_classes_factory(_classes)
+#_classes = (
+#   KeyFrame,
+#)
+#
+#register, unregister = bpy.utils.register_classes_factory(_classes)
