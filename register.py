@@ -30,7 +30,7 @@ bl_info = {
     "blender": (3,10,0),
     "location": "File > Import/Export > X-Plane",
     "description": "Import X-Plane objects/planes (.obj format)",
-    "warning": "Requires installation of dependencies",
+#    "warning": "Requires installation of dependencies",
     "category": "Import-Export",
 }
 
@@ -227,18 +227,21 @@ def register():
     global dependencies_installed
     dependencies_installed = False
 
-    for cls in preference_classes:
-        bpy.utils.register_class(cls)
+#    for cls in preference_classes:
+#        bpy.utils.register_class(cls)
 
     try:
-        # check for typing:Self support
-        if sys.version_info < (3,11):
-            # must install the `typing-extensions` module as python does not
-            # include native support for the typing:Self module prior to 3.11
-            from typing_extensions import Self
-        else:
-            from typing import Self
+#        # check for typing:Self support
+#        if sys.version_info < (3,11):
+#            # must install the `typing-extensions` module as python does not
+#            # include native support for the typing:Self module prior to 3.11
+#            from typing_extensions import Self
+#        else:
+#            from typing import Self
 
+        # Dependency code check works for Windows, fails on OSX, fall-back to using
+        # Any over the typed definition provided by typing.Self for now
+        # Impacts: types.ObjectData.New() method return type
         dependencies_installed = True
         register_all_classes()
 

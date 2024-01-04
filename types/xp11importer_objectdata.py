@@ -11,10 +11,10 @@ from typing import Any, List
 from .types import Attribute
 from .xp11importer_keyframe import KeyFrame
 
-if sys.version_info < (3,11):
-   from typing_extensions import Self
-else:
-   from typing import Self
+#if sys.version_info < (3,11):
+#   from typing_extensions import Self
+#else:
+#   from typing import Self
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class ObjectData:
       for o in bpy.context.selected_objects:
          o.select_set(False)
          
-   def New(self, name: str = '', type: ObjectType = ObjectType.none) -> Self:
+   def New(self, name: str = '', type: ObjectType = ObjectType.none) -> Any:
       self.name = name
       self.type = type
       return self

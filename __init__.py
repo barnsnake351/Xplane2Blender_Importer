@@ -51,7 +51,7 @@ bl_info = {
     "blender": (3,10,0),
     "location": "File > Import/Export > X-Plane",
     "description": "Import X-Plane objects/planes (.obj format)",
-    "warning": "Requires installation of dependencies",
+#    "warning": "Requires installation of dependencies",
     "category": "Import-Export",
 }
 
