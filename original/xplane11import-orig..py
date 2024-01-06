@@ -282,7 +282,7 @@ class xplane11import(bpy.types.Operator):
                 if(kf[0] == 'rot'):
                     # if rotation follows translation, save we'll use that as the origin
                     origin = tempOrigin
-                    break;
+                    break
         return origin
 
     def transformMeshOrigin(self, ob, origin):

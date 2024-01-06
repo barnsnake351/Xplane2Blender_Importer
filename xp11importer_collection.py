@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 import mathutils
 from mathutils import Vector
 
@@ -33,6 +34,7 @@ class XplaneImportCollection:
    input_file: str
    shade_smooth: bool = False
    convert_to_quads: bool = False
+   flip_normals: bool = False
    face_threshold: float = math.radians(40.0)
    shape_threshold: float = math.radians(40.0)
    
@@ -308,7 +310,12 @@ class XplaneImportCollection:
                   logger.info(f"creating new object with label: {label}, expected label: {self.name}.{obj.name}")
                   bl_mesh = bpy.data.meshes.new(f"{label}.mesh")
                   bl_obj = bpy.data.objects.new(label, bl_mesh)
-                  bl_obj.location = obj.objectOrigin
+# new set local origin point
+#                  bl_obj.location = obj.objectOrigin
+                  bl_obj.location = obj.updateOrigin()
+                  
+                  # translate the mesh to match the updated origin
+                  bl_obj.data.transform(mathutils.Matrix.Translation(-obj.objectOrigin))
                   bl_obj.show_name = False
       
                   logger.info(f"linking {bl_obj} to {coll}")
@@ -350,7 +357,10 @@ class XplaneImportCollection:
                         logger.error("failed to set x-plane attribute", e)
       
                   try:
-                     bpy.ops.object.select_pattern(pattern=bl_obj.name)
+                     # Set the current object to active and de-select all others
+                     bpy.data.objects.get(bl_obj.name)
+
+#                     bpy.ops.object.select_pattern(pattern=bl_obj.name)
                      bpy.ops.object.mode_set(mode='EDIT')
                      bpy.ops.mesh.select_all(action='DESELECT')
                      bpy.ops.mesh.select_mode(type='VERT')
@@ -374,6 +384,12 @@ class XplaneImportCollection:
                            materials = True,
                         )
       
+                     if(self.flip_normals):
+                        bm = bmesh.from_edit_mesh(bl_obj.data)
+                        me = bl_obj.data
+                        for f in bm.faces:
+                           f.normal_flip()
+                        bmesh.update_edit_mesh(me)
                      bpy.ops.object.mode_set(mode='OBJECT')
 
                      if(self.shade_smooth):

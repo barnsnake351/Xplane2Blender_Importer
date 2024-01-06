@@ -1,6 +1,6 @@
 import bpy
-#import mathutils
-from mathutils import Vector
+import mathutils
+#from mathutils import Vector
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -9,7 +9,7 @@ import sys
 from typing import Any, List
 
 from .types import Attribute
-from .xp11importer_keyframe import KeyFrame
+from .xp11importer_keyframe import KeyFrame, KeyframeType
 
 #if sys.version_info < (3,11):
 #   from typing_extensions import Self
@@ -28,7 +28,7 @@ class ObjectType(Enum):
 class ObjectData:
    attr: List[Attribute] = field(default_factory=list)
    faceData: tuple = None
-   objectOrigin: Vector = Vector((0,0,0))
+   objectOrigin: mathutils.Vector = mathutils.Vector((0,0,0))
    
    # Reserved objects
    _bl_object: bpy.types.Object = None
@@ -93,6 +93,22 @@ class ObjectData:
       return self
 
       
+   def updateOrigin(self) -> mathutils.Vector:
+      tmpOrigin = mathutils.Vector((0,0,0))
+
+      location_processed = False
+      for kf in self.keyFrames:
+         # Set the rotation origin based on the first 'location' keyframe
+         if kf.type == KeyframeType.translation and not location_processed:
+            tmpOrigin = kf.loc
+            location_processed = True
+         # Set the rotation origin to the value of the location keyframe preseeding this value
+         if kf.type == KeyframeType.rotation and location_processed:
+            self.objectOrigin = tmpOrigin
+            break
+      return self.objectOrigin
+
+         
 
    # setObjectName
    # attempts to locate a unique name based on the input criteria, if found and an attached
@@ -169,7 +185,9 @@ class ObjectData:
 
       try:
          # set the object to the defined origin
-         obj.location = self.objectOrigin
+#         obj.location = self.objectOrigin
+         obj.location = self.updateOrigin()
+
          # Adjust axis size, set style and hide the cursor in the viewport display
          obj.empty_display_size = display_size
          obj.empty_display_type = display_type

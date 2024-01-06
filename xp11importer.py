@@ -20,6 +20,7 @@ class pluginDefaults():
    
    # TRIS -> Quads
    trisToQuads: bool = False
+   flipNormals: bool = False
    faceThreshold: float = math.radians(40)
    shapeThreshold: float = math.radians(40)
 
@@ -40,6 +41,11 @@ class XPlane11Importer(bpy.types.Operator):
    convertTrisToQuads: bpy.props.BoolProperty(
       name = "TRIS -> Quads",
       default = pluginDefaults.trisToQuads
+   )
+
+   flipNormals: bpy.props.BoolProperty(
+      name = "Flip Noremals",
+      default = pluginDefaults.flipNormals
    )
 
    faceThreshold: bpy.props.FloatProperty(
@@ -70,7 +76,8 @@ class XPlane11Importer(bpy.types.Operator):
             shade_smooth=self.shadeSmooth,
             convert_to_quads=self.convertTrisToQuads,
             face_threshold=self.faceThreshold,
-            shape_threshold=self.shapeThreshold)
+            shape_threshold=self.shapeThreshold,
+            flip_normals=self.flipNormals)
       except Exception as e:
          print(f"[error] Failed to import collection from [{self.filepath}]: {e}")
          return {"CANCELLED"}
